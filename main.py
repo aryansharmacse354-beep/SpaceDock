@@ -4,15 +4,27 @@ Executes end-to-end workflow and generates comparative benchmark report against 
 """
 import os
 import sys
-import pandas as pd
-import numpy as np
+import runpy
+
+# If executed by Streamlit (e.g. on Streamlit Cloud with main.py as entrypoint), dispatch directly to app.py
+if "streamlit" in sys.modules or os.environ.get("STREAMLIT_SERVER_PORT") or any("streamlit" in arg.lower() for arg in sys.argv):
+    app_path = os.path.join(os.path.dirname(__file__), "app.py")
+    if os.path.exists(app_path):
+        runpy.run_path(app_path, run_name="__main__")
+        sys.exit(0)
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from generate_data import generate_burn_in_data
-from outlier_detection import DynamicOutlierDetector, evaluate_screening_methods
-from drift_predictor import DriftPredictor
-from explainability import ExplainabilityDashboard
+try:
+    import pandas as pd
+    import numpy as np
+    from generate_data import generate_burn_in_data
+    from outlier_detection import DynamicOutlierDetector, evaluate_screening_methods
+    from drift_predictor import DriftPredictor
+    from explainability import ExplainabilityDashboard
+except Exception as e:
+    pass
+
 
 def run_pipeline():
     print("=" * 85)
