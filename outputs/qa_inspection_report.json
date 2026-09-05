@@ -1,0 +1,29 @@
+{
+  "component_id": "COMP_00007",
+  "lot_id": "Lot_A",
+  "defect_classification": "Latent Defect",
+  "measurements_uA": {
+    "0h": 7.417,
+    "24h": 8.506,
+    "96h": 19.062,
+    "168h_actual": 37.46,
+    "168h_predicted_at_24h": 36.64699935913086
+  },
+  "screening_decision": {
+    "static_limit_result": "PASSED (Latent Defect Escaped Traditional Test)",
+    "ai_early_24h_screen": "REJECTED (Correctly Intercepted at 24h)",
+    "predicted_safety_slope": 0.17399,
+    "safety_slope_threshold": 0.05
+  },
+  "shap_explanation_summary": {
+    "value_0h": -0.4504571855068207,
+    "value_24h": -1.9999778270721436,
+    "delta_24h_0h": 9.701224327087402,
+    "velocity_24h": 0.4171551764011383,
+    "ratio_24h_0h": 13.128813743591309,
+    "lot_Lot_A": -0.014106824062764645,
+    "lot_Lot_B": -0.009247076697647572,
+    "lot_Lot_C": 9.567243978381157e-05
+  },
+  "qa_inspector_verdict": "Component exhibited subtle 24h acceleration (+1.2 \u00b5A delta) resulting in AI predicted thermal runaway of >35 \u00b5A. Early rejection at 24h prevents catastrophic space payload failure."
+}
