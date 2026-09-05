@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "spacedock-burnin-screening",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "https://share.streamlit.io"
+    }
+  ]
+}
