@@ -1,2 +1,0 @@
-# Lightweight dependencies for Vercel Serverless Function
-# (api/index.py uses Python standard library for ultra-fast <1MB deployment)
