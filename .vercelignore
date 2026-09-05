@@ -1,0 +1,19 @@
+# Exclude large binary datasets and models from Vercel serverless bundle
+models/
+*.joblib
+data/
+outputs/
+*.png
+*.jpg
+*.csv
+.streamlit/
+app.py
+burnin_tool.py
+main.py
+tool.py
+train_models.py
+populate_data.py
+generate_new_data.py
+build_full_dataset.py
+verify_env.py
+requirements.txt
