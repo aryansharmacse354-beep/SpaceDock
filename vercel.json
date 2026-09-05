@@ -1,10 +1,15 @@
 {
   "version": 2,
-  "name": "spacedock-burnin-screening",
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "https://share.streamlit.io"
+      "dest": "api/index.py"
     }
   ]
 }
