@@ -191,11 +191,12 @@ export function screenDie(signals: Signals, lot: LotProfile, model: DriftModel):
   const z24 = (signals.v24 - lot.mean) / sigma;
   const z96 = (signals.v96 - lot.mean) / sigma;
   const margin = USL - forecast;
+  const usesLateRead = model.config.slots.some((id) => id === 'v96' || id === 'slope2496' || id === 'z96');
 
-  const staticFail = signals.v0 > USL || signals.v24 > USL || signals.v96 > USL || forecast > USL;
+  const staticFail = signals.v0 > USL || signals.v24 > USL || (usesLateRead && signals.v96 > USL) || forecast > USL;
   const driftFail = slope >= SAFETY_SLOPE;
   const borderline = slope >= REVIEW_SLOPE;
-  const anomaly = Math.abs(z24) >= Z_LIMIT || Math.abs(z96) >= Z_LIMIT;
+  const anomaly = Math.abs(z24) >= Z_LIMIT || (usesLateRead && Math.abs(z96) >= Z_LIMIT);
 
   const verdict = staticFail || driftFail ? 'reject' : anomaly || borderline ? 'review' : 'pass';
 
@@ -210,12 +211,11 @@ export function screenDie(signals: Signals, lot: LotProfile, model: DriftModel):
           : 'Inside drift and static limits. Flight ready.';
 
   let health = 100;
+  const zGate = usesLateRead ? Math.max(Math.abs(z24), Math.abs(z96)) : Math.abs(z24);
   health -= Math.min(78, Math.max(0, slope / SAFETY_SLOPE) * 38);
-  health -= Math.min(20, Math.max(0, Math.max(Math.abs(z24), Math.abs(z96)) - 1.5) * 6);
+  health -= Math.min(20, Math.max(0, zGate - 1.5) * 6);
   if (staticFail) health = Math.min(health, 8);
   health = Math.round(Math.min(100, Math.max(2, health)));
-
-  const usesLateRead = model.config.slots.some((id) => id === 'v96' || id === 'slope2496' || id === 'z96');
 
   return {
     forecast,
@@ -242,7 +242,9 @@ export function screenDie(signals: Signals, lot: LotProfile, model: DriftModel):
       {
         state: anomaly ? 'warn' : 'ok',
         label: 'Lot PAT z-score',
-        detail: `${z24 >= 0 ? '+' : ''}${fmt(z24, 2)}σ @ 24 h · ${z96 >= 0 ? '+' : ''}${fmt(z96, 2)}σ @ 96 h against ±${Z_LIMIT}σ.`,
+        detail: usesLateRead
+          ? `${z24 >= 0 ? '+' : ''}${fmt(z24, 2)}σ @ 24 h · ${z96 >= 0 ? '+' : ''}${fmt(z96, 2)}σ @ 96 h against ±${Z_LIMIT}σ.`
+          : `${z24 >= 0 ? '+' : ''}${fmt(z24, 2)}σ against a ±${Z_LIMIT}σ gate.`,
       },
       {
         state: 'ok',
@@ -250,11 +252,6 @@ export function screenDie(signals: Signals, lot: LotProfile, model: DriftModel):
         detail: usesLateRead
           ? '0 h + 24 h + 96 h snapshot. 72 hours of burn-in removed.'
           : '0 h + 24 h snapshot. 144 hours of burn-in removed.',
-      },
-      {
-        state: 'ok',
-        label: 'Feature set',
-        detail: `${model.config.slots.length} slots · degree ${model.config.degree} · ${model.terms.length} regression terms.`,
       },
     ],
   };

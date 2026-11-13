@@ -52,7 +52,8 @@ const defaultState = await page.evaluate(() => {
     active,
     terms: coefficientText ? Number(coefficientText[1]) : null,
     has96Range: Boolean(consoleSection.querySelector('#v96-range')),
-    consoleText: consoleSection.innerText.replace(/\s+/g, ' ').slice(0, 220),
+    hasLateReason: /@ 96 h/i.test(consoleSection.innerText),
+    hasFeatureReason: /Feature set/i.test(consoleSection.innerText),
     certId: consoleSection.innerText.match(/SD-LOT-\d+-[A-F0-9]{8}/)?.[0] ?? null,
   };
 });
@@ -60,6 +61,8 @@ check('default slot pair is V0 + V24', defaultState.active.length === 2 && defau
 check('default fit has 6 terms', defaultState.terms === 6, String(defaultState.terms));
 check('96h input hidden by default', defaultState.has96Range === false);
 check('QA certificate issued', Boolean(defaultState.certId), defaultState.certId ?? 'none');
+check('default gate ignores hidden 96h read', defaultState.hasLateReason === false);
+check('default console keeps 4 reasons', defaultState.hasFeatureReason === false);
 
 const clickSlot = (label) =>
   page.evaluate((text) => {
