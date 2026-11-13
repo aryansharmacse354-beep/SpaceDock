@@ -119,7 +119,7 @@ export function Console({
       <div className="flex flex-wrap items-end justify-between gap-6">
         <SectionHeading
           index="04"
-          kicker="Live inference"
+          kicker="Module 01 · Real-time component screener"
           title="Put a die on the bench."
           description={
             showV96

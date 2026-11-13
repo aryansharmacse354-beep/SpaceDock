@@ -30,7 +30,7 @@ const baselines = [
     detail: '24h forecast + lot-aware PAT + safety slope',
     recall: 100,
     fnr: '0.00%',
-    mae: '0.3181 µA',
+    mae: 'live',
     risk: 'Flight ready',
     tone: 'text-pass border-pass/25 bg-pass/[0.07]',
     bar: '#45e6a5',
@@ -64,9 +64,9 @@ export function Benchmarks({ metrics }: { metrics: ModelMetrics | null }) {
     <Section id="validation" className="border-t border-white/[0.05] bg-[#040811]/40">
       <SectionHeading
         index="06"
-        kicker="Validation"
+        kicker="Module 04 · Model parity benchmark"
         title="Zero escape is the only acceptable number."
-        description="A screen is only as good as the defects it stops. The gate was benchmarked against the static endpoint rule and a conventional AEC-Q001 anomaly stack — then replayed against the full fleet."
+        description="A screen is only as good as the defects it stops. The drift model was benchmarked against a static 50 µA endpoint and a conventional AEC-Q001 PAT + Isolation Forest stack — then replayed against the full fleet."
       />
 
       <div className="mt-12 grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
@@ -100,7 +100,9 @@ export function Benchmarks({ metrics }: { metrics: ModelMetrics | null }) {
                       </div>
                     </div>
                     <div className="font-mono text-[12px] tnum text-muted">{row.fnr}</div>
-                    <div className="font-mono text-[12px] tnum text-muted">{row.mae}</div>
+                    <div className="font-mono text-[12px] tnum text-muted">
+                      {row.mae === 'live' ? (liveMae === null ? '—' : `${fmt(liveMae, 3)} µA`) : row.mae}
+                    </div>
                     <div className="text-right">
                       <span className={`inline-flex rounded-full border px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.12em] ${row.tone}`}>
                         {row.risk}
@@ -153,7 +155,7 @@ export function Benchmarks({ metrics }: { metrics: ModelMetrics | null }) {
                   <span className="font-mono text-[13px] tnum text-ink">{liveMae === null ? '—' : `${fmt(liveMae, 3)} µA`}</span>
                 </div>
                 <div className="mt-1.5 text-[10.5px] leading-relaxed text-muted">
-                  Published pipeline reference: 0.3181 µA · R² 0.9860.
+                  Deterministic 80/20 holdout · refit on every load.
                 </div>
               </div>
 

@@ -226,9 +226,9 @@ export function Mission() {
     <Section id="mission">
       <SectionHeading
         index="01"
-        kicker="The escape band"
+        kicker="Mission · 125 °C ESS"
         title="Static limits don't catch slow death."
-        description="Standard ESS checks whether a die is below 50 µA after seven days. SpaceDock checks where the die is heading — and stops the burn-in clock at 24 hours."
+        description="Flight silicon is baked for 168 hours at 125 °C under MIL-STD-883 / AEC-Q001. A static 50 µA limit only sees the final reading, so latent gate-oxide defects that start at 1–12 µA can still escape — SpaceDock forecasts the endpoint from a 24-hour read."
       />
 
       <div className="mt-14 grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-12">

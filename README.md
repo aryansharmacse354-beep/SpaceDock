@@ -20,10 +20,10 @@ The dashboard is organized into connected panels:
 - **Mission** — why early screening matters and where static limits fail.
 - **Architecture** — the four gates every die passes through.
 - **Model** — selectable input slots with holdout metrics, parity plot, and forecast terms.
-- **Console** — live single-die screening with adjustable burn-in values, verdict reasons, health score, and projected drift.
-- **Telemetry** — searchable fleet ledger, risk scatter, verdict mix, and one-click inspection.
-- **Validation** — benchmark comparison for the screening protocol.
-- **Audit** — reproducible QA certificate with checksum and JSON export.
+- **Console** — Real-Time Component Screener: live single-die inference with adjustable burn-in values, verdict reasons, health score, and projected drift.
+- **Telemetry** — Batch Telemetry Database: searchable 2,000-die ledger, risk scatter, verdict mix, and one-click inspection.
+- **Validation** — Model Parity Benchmark: static 50 µA limit vs AEC-Q001 PAT + Isolation Forest vs the SpaceDock drift model.
+- **Audit** — Component QA Audit Inspector: reproducible QA certificate with checksum and JSON export.
 
 Model inputs can be toggled at any time. The fit, fleet screen, console readout, and audit certificate refit immediately.
 

@@ -68,9 +68,9 @@ export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
     <Section id="telemetry" className="border-t border-white/[0.05]">
       <SectionHeading
         index="05"
-        kicker="Fleet telemetry"
+        kicker="Module 02 · Batch telemetry database"
         title="2,000 die. One screen."
-        description="The full 20-lot burn-in telemetry feed, scored by the same engine that powers the console. Filter the fleet, inspect a die, and send it straight back to the bench."
+        description="The full 20-lot burn-in telemetry database, scored by the same engine that powers the screener. Search, filter, and sort the fleet, inspect a die, and send it straight back to the bench."
       />
 
       {parts.length === 0 ? (

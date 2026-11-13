@@ -59,9 +59,9 @@ export function Audit({ certificate, result, onDownload }: AuditProps) {
     <Section id="audit" className="border-t border-white/[0.05]">
       <SectionHeading
         index="07"
-        kicker="Audit & handoff"
+        kicker="Module 03 · Component QA audit inspector"
         title="Every verdict ships with evidence."
-        description="A screening decision is only useful if it can be defended six months later. The console issues a complete QA record with every verdict — inputs, model, reasons, and checksum."
+        description="A screening decision is only useful if it can be defended six months later. The audit inspector issues a complete QA record with every verdict — inputs, model, reasons, and checksum — exportable as JSON."
       />
 
       <div className="mt-12 grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
