@@ -145,6 +145,82 @@ await page.evaluate(() => {
 });
 await sleep(700);
 
+const moduleState = await page.evaluate(() => {
+  const audit = document.querySelector('#audit')?.innerText ?? '';
+  const validation = document.querySelector('#validation')?.innerText ?? '';
+  const consoleText = document.querySelector('#console')?.innerText ?? '';
+  return {
+    auditPanels: /panel a · leakage trajectory/i.test(audit) && /panel b · gate margins/i.test(audit),
+    attribution: /global feature attribution/i.test(validation),
+    editorInputs: document.querySelectorAll('#telemetry input[aria-label$="0h leakage"]').length,
+    healthLabel: /ai health score/i.test(consoleText),
+  };
+});
+check('QA audit inspector shows dual-panel curves', moduleState.auditPanels === true);
+check('parity benchmark shows global attributions', moduleState.attribution === true);
+check('batch database exposes editable readings', moduleState.editorInputs >= 10, String(moduleState.editorInputs));
+check('console reports AI health score', moduleState.healthLabel === true);
+
+const setValue = (selector, value) =>
+  page.evaluate(
+    (target, next) => {
+      const input = document.querySelector(target);
+      if (!input) throw new Error(`input ${target} not found`);
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(input, next);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+    selector,
+    value,
+  );
+
+await setValue('#telemetry input[aria-label="Insert part id"]', 'QA-TEST-001');
+await setValue('#telemetry input[aria-label="Insert 0h leakage"]', '9.8');
+await setValue('#telemetry input[aria-label="Insert 24h leakage"]', '11.2');
+await sleep(300);
+await page.evaluate(() => {
+  const form = document.querySelector('#telemetry form');
+  form?.requestSubmit();
+});
+await sleep(700);
+await setValue('#telemetry input[aria-label="Search parts"]', 'QA-TEST-001');
+await sleep(600);
+const insertedState = await page.evaluate(() => {
+  const telemetry = document.querySelector('#telemetry');
+  return {
+    hasRow: /QA-TEST-001/i.test(telemetry?.innerText ?? ''),
+    inserted: telemetry?.innerText.match(/(\d+)\s+INSERTED/i)?.[1] ?? null,
+  };
+});
+check(
+  'component insertion screens a new die',
+  insertedState.hasRow && Number(insertedState.inserted) === 1,
+  JSON.stringify(insertedState),
+);
+
+await page.evaluate(() => {
+  const row = [...document.querySelectorAll('#telemetry tbody tr')].find((tr) =>
+    tr.textContent.includes('QA-TEST-001'),
+  );
+  const button = [...(row?.querySelectorAll('button') ?? [])].find((node) => /preview/i.test(node.textContent));
+  button?.click();
+});
+await sleep(600);
+const previewVisible = await page.evaluate(() =>
+  Boolean(document.querySelector('#telemetry tbody svg[aria-label="Projected leakage trajectory"]')),
+);
+check('inline trajectory preview opens', previewVisible === true);
+
+await page.evaluate(() => {
+  const reset = [...document.querySelectorAll('#telemetry button')].find((node) =>
+    /reset table/i.test(node.textContent),
+  );
+  reset?.click();
+});
+await sleep(600);
+await setValue('#telemetry input[aria-label="Search parts"]', '');
+await sleep(400);
+
 fs.mkdirSync('reference/shots', { recursive: true });
 await page.screenshot({ path: 'reference/shots/restored-desktop.png', fullPage: true });
 

@@ -19,6 +19,7 @@ export const Z_LIMIT = 3;
 
 export interface FeatureTerm {
   name: string;
+  slots: SlotId[];
   compute: (signals: Signals, lot: LotProfile) => number;
 }
 
@@ -46,16 +47,17 @@ function slotName(id: SlotId): string {
 }
 
 export function buildTerms(slots: SlotId[], degree: 1 | 2): FeatureTerm[] {
-  const terms: FeatureTerm[] = [{ name: 'Intercept', compute: () => 1 }];
+  const terms: FeatureTerm[] = [{ name: 'Intercept', slots: [], compute: () => 1 }];
 
   for (const id of slots) {
-    terms.push({ name: slotName(id), compute: (signals, lot) => slotValue(id, signals, lot) });
+    terms.push({ name: slotName(id), slots: [id], compute: (signals, lot) => slotValue(id, signals, lot) });
   }
 
   if (degree === 2) {
     for (const id of slots) {
       terms.push({
         name: `${slotName(id)}²`,
+        slots: [id],
         compute: (signals, lot) => {
           const value = slotValue(id, signals, lot);
           return value * value;
@@ -66,6 +68,7 @@ export function buildTerms(slots: SlotId[], degree: 1 | 2): FeatureTerm[] {
       for (let j = i + 1; j < slots.length; j += 1) {
         terms.push({
           name: `${slotName(slots[i])}·${slotName(slots[j])}`,
+          slots: [slots[i], slots[j]],
           compute: (signals, lot) => slotValue(slots[i], signals, lot) * slotValue(slots[j], signals, lot),
         });
       }
@@ -333,6 +336,34 @@ export function buildModelReport(parts: PartRecord[], config: ModelConfig): Mode
     },
     screened,
   };
+}
+
+export interface FeatureAttribution {
+  slot: string;
+  share: number;
+}
+
+export function globalAttributions(parts: PartRecord[], model: DriftModel): FeatureAttribution[] {
+  if (parts.length === 0) return [];
+  const terms = buildTerms(model.config.slots, model.config.degree);
+  const totals = new Map<string, number>();
+
+  for (let i = 1; i < terms.length; i += 1) {
+    let meanAbs = 0;
+    for (const part of parts) meanAbs += Math.abs(terms[i].compute(part, lotOf(part)));
+    meanAbs /= parts.length;
+    const contribution = Math.abs(model.coef[i] ?? 0) * meanAbs;
+    const split = terms[i].slots.length || 1;
+    for (const id of terms[i].slots) {
+      const label = slotName(id);
+      totals.set(label, (totals.get(label) ?? 0) + contribution / split);
+    }
+  }
+
+  const total = [...totals.values()].reduce((sum, value) => sum + value, 0) || 1;
+  return [...totals.entries()]
+    .map(([slot, value]) => ({ slot, share: value / total }))
+    .sort((a, b) => b.share - a.share);
 }
 
 export function equationTerms(model: DriftModel): string {

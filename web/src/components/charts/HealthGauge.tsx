@@ -37,7 +37,7 @@ export function HealthGauge({ score, verdict }: { score: number; verdict: Verdic
         <span className="display text-[34px] leading-none tnum" style={{ color }}>
           {score}
         </span>
-        <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.2em] text-dim">Health</span>
+        <span className="mt-1 font-mono text-[8px] uppercase tracking-[0.14em] text-dim">AI health score</span>
       </div>
     </div>
   );

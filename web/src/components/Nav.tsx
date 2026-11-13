@@ -12,9 +12,10 @@ const LINKS = [
   { id: 'console', label: 'Console' },
   { id: 'telemetry', label: 'Telemetry' },
   { id: 'validation', label: 'Validation' },
+  { id: 'audit', label: 'Audit' },
 ];
 
-const SECTION_IDS = ['top', ...LINKS.map((link) => link.id), 'audit'];
+const SECTION_IDS = ['top', ...LINKS.map((link) => link.id)];
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);

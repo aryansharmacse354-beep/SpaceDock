@@ -1,5 +1,6 @@
 import { ShieldCheck } from 'lucide-react';
-import { fmt } from '../../lib/format';
+import { fmt, pct } from '../../lib/format';
+import type { FeatureAttribution } from '../../lib/model';
 import type { ModelMetrics } from '../../lib/types';
 import { Section, SectionHeading } from '../ui/SectionHeading';
 import { Reveal } from '../ui/Reveal';
@@ -56,7 +57,13 @@ const protocol = [
   },
 ];
 
-export function Benchmarks({ metrics }: { metrics: ModelMetrics | null }) {
+export function Benchmarks({
+  metrics,
+  attribution,
+}: {
+  metrics: ModelMetrics | null;
+  attribution: FeatureAttribution[];
+}) {
   const liveRecall = metrics ? metrics.recall * 100 : null;
   const liveMae = metrics ? metrics.mae : null;
 
@@ -182,6 +189,47 @@ export function Benchmarks({ metrics }: { metrics: ModelMetrics | null }) {
           </div>
         </Reveal>
       </div>
+
+      <Reveal delay={0.08}>
+        <div className="panel mt-6 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="label text-[8.5px]">Global feature attribution</div>
+              <div className="mt-1 text-[13px] text-ink">Share of forecast signal by active input slot</div>
+            </div>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.14em] text-muted">
+              {attribution.length} slots · 2,000 die
+            </span>
+          </div>
+
+          {attribution.length > 0 ? (
+            <div className="mt-5 grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+              {attribution.map((item) => (
+                <div key={item.slot}>
+                  <div className="flex items-baseline justify-between font-mono text-[9px] uppercase tracking-[0.12em]">
+                    <span className="text-muted">{item.slot}</span>
+                    <span className="tnum text-ink">{pct(item.share)}</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-500"
+                      style={{ width: `${Math.max(2, item.share * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-6 text-center font-mono text-[9px] uppercase tracking-[0.16em] text-dim">
+              resolving attributions…
+            </div>
+          )}
+
+          <div className="mt-4 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">
+            global |coefficient| × mean |feature| · interactions split across slots
+          </div>
+        </div>
+      </Reveal>
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         {protocol.map((item, index) => (

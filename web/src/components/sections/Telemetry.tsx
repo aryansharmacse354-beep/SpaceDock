@@ -1,9 +1,11 @@
-import { ArrowUpRight, Search, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowUpRight, Eye, EyeOff, Plus, RotateCcw, Search, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
+import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import { cn } from '../../lib/cn';
 import { fmt } from '../../lib/format';
-import type { LotProfile, ScreenedPart, Verdict } from '../../lib/types';
+import { screenDie } from '../../lib/model';
+import type { DriftModel, LotProfile, PartRecord, ScreenedPart, Signals, Verdict } from '../../lib/types';
 import { FleetScatter } from '../charts/FleetScatter';
+import { TrajectoryChart } from '../charts/TrajectoryChart';
 import { Section, SectionHeading } from '../ui/SectionHeading';
 import { Reveal } from '../ui/Reveal';
 import { VerdictBadge, verdictMeta } from '../ui/Verdict';
@@ -11,7 +13,7 @@ import { VerdictBadge, verdictMeta } from '../ui/Verdict';
 interface TelemetryProps {
   parts: ScreenedPart[];
   lots: LotProfile[];
-  missed: number;
+  model: DriftModel | null;
   onInspect: (part: ScreenedPart) => void;
 }
 
@@ -22,28 +24,61 @@ const verdictOptions: Array<{ value: 'all' | Verdict; label: string }> = [
   { value: 'reject', label: 'Reject' },
 ];
 
-export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
+export function Telemetry({ parts, lots, model, onInspect }: TelemetryProps) {
   const [lot, setLot] = useState('all');
   const [verdict, setVerdict] = useState<'all' | Verdict>('all');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'forecast' | 'slope'>('forecast');
   const [limit, setLimit] = useState(10);
+  const [edits, setEdits] = useState<Record<string, Partial<Signals>>>({});
+  const [inserted, setInserted] = useState<PartRecord[]>([]);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [form, setForm] = useState({ lotId: '', partId: '', v0: '', v24: '', v96: '' });
+  const [resetToken, setResetToken] = useState(0);
+
+  const activeLotId = form.lotId || lots[0]?.id || '';
+  const showV96 = Boolean(
+    model?.config.slots.some((slot) => slot === 'v96' || slot === 'slope2496' || slot === 'z96'),
+  );
+
+  const dataset = useMemo(() => {
+    const lotMap = new Map(lots.map((profile) => [profile.id, profile]));
+    const edited = parts.map((part) => {
+      const edit = edits[part.partId];
+      if (!edit) return part;
+      const v0 = edit.v0 ?? part.v0;
+      const v24 = edit.v24 ?? part.v24;
+      const v96 = edit.v96 ?? part.v96;
+      const profile = lotMap.get(part.lotId);
+      const screening = model && profile ? screenDie({ v0, v24, v96 }, profile, model) : part.screening;
+      return { ...part, v0, v24, v96, screening };
+    });
+    const added = model
+      ? inserted.flatMap((record) => {
+          const profile = lotMap.get(record.lotId);
+          return profile ? [{ ...record, screening: screenDie(record, profile, model) }] : [];
+        })
+      : [];
+    return [...added, ...edited];
+  }, [parts, edits, inserted, lots, model]);
+
+  const insertedIds = useMemo(() => new Set(inserted.map((record) => record.partId)), [inserted]);
 
   const counts = useMemo(() => {
     let pass = 0;
     let review = 0;
     let reject = 0;
-    for (const part of parts) {
+    for (const part of dataset) {
       if (part.screening.verdict === 'pass') pass += 1;
       else if (part.screening.verdict === 'review') review += 1;
       else reject += 1;
     }
-    return { pass, review, reject, total: parts.length };
-  }, [parts]);
+    return { pass, review, reject, total: dataset.length };
+  }, [dataset]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return parts
+    return dataset
       .filter((part) => (lot === 'all' ? true : part.lotId === lot))
       .filter((part) => (verdict === 'all' ? true : part.screening.verdict === verdict))
       .filter(
@@ -57,12 +92,73 @@ export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
           ? b.screening.forecast - a.screening.forecast
           : b.screening.slope - a.screening.slope,
       );
-  }, [parts, lot, verdict, query, sort]);
+  }, [dataset, lot, verdict, query, sort]);
 
   const rows = filtered.slice(0, limit);
   const flagged = counts.review + counts.reject;
+  const escaped = dataset.filter((part) => part.defect && part.screening.verdict !== 'reject').length;
   const passShare = counts.total ? (counts.pass / counts.total) * 100 : 0;
   const reviewShare = counts.total ? (counts.review / counts.total) * 100 : 0;
+  const dirty = Object.keys(edits).length > 0 || inserted.length > 0;
+
+  const updateReading = (partId: string, key: keyof Signals, raw: string) => {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return;
+    const bounded = Math.min(120, Math.max(0, value));
+    setEdits((prev) => ({ ...prev, [partId]: { ...prev[partId], [key]: bounded } }));
+  };
+
+  const canInsert =
+    Boolean(model) &&
+    form.v0.trim() !== '' &&
+    form.v24.trim() !== '' &&
+    Number.isFinite(Number(form.v0)) &&
+    Number.isFinite(Number(form.v24));
+
+  const insertComponent = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canInsert || !model) return;
+    const profile = lots.find((entry) => entry.id === activeLotId) ?? lots[0];
+    if (!profile) return;
+    const v0 = Math.min(120, Math.max(0, Number(form.v0)));
+    const v24 = Math.min(120, Math.max(0, Number(form.v24)));
+    const v96 = form.v96.trim() === '' ? v24 : Math.min(120, Math.max(0, Number(form.v96)));
+    const baseId =
+      form.partId.trim().toUpperCase() ||
+      `ADHOC-${profile.id}-${String(inserted.length + 1).padStart(3, '0')}`;
+    const taken = new Set([...parts.map((part) => part.partId), ...inserted.map((part) => part.partId)]);
+    let partId = baseId;
+    let suffix = 1;
+    while (taken.has(partId)) {
+      suffix += 1;
+      partId = `${baseId}-${suffix}`;
+    }
+    setInserted((prev) => [
+      {
+        lotId: profile.id,
+        partId,
+        v0,
+        v24,
+        v96,
+        v168: 0,
+        lotMean: profile.mean,
+        lotSigma: profile.sigma,
+        z24: (v24 - profile.mean) / Math.max(profile.sigma, 0.05),
+        slope0_24: (v24 - v0) / 24,
+        defect: false,
+      },
+      ...prev,
+    ]);
+    setForm({ lotId: activeLotId, partId: '', v0: '', v24: '', v96: '' });
+    setLimit(10);
+  };
+
+  const resetTable = () => {
+    setEdits({});
+    setInserted([]);
+    setPreviewId(null);
+    setResetToken((value) => value + 1);
+  };
 
   return (
     <Section id="telemetry" className="border-t border-white/[0.05]">
@@ -72,6 +168,100 @@ export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
         title="2,000 die. One screen."
         description="The full 20-lot burn-in telemetry database, scored by the same engine that powers the screener. Search, filter, and sort the fleet, inspect a die, and send it straight back to the bench."
       />
+
+      <Reveal delay={0.05}>
+        <form onSubmit={insertComponent} className="panel mt-10 flex flex-col gap-4 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="label text-[8.5px]">Batch data editor</div>
+              <div className="mt-1 text-[13px] text-ink">Edit readings in the ledger or insert a component</div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-dim">
+                {Object.keys(edits).length} edits · {inserted.length} inserted
+              </span>
+              {dirty ? (
+                <button
+                  type="button"
+                  onClick={resetTable}
+                  className="inline-flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.14em] text-dim transition-colors hover:text-ink"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Reset table
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.1fr_1fr_0.8fr_0.8fr_0.8fr_auto]">
+            <select
+              aria-label="Insert lot"
+              value={activeLotId}
+              onChange={(event) => setForm({ ...form, lotId: event.target.value })}
+              className="appearance-none rounded-lg border border-white/[0.09] bg-[#060c17] px-3 py-2 font-mono text-[10px] text-ink focus:border-accent/40"
+            >
+              {lots.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.id}
+                </option>
+              ))}
+            </select>
+            <input
+              aria-label="Insert part id"
+              value={form.partId}
+              onChange={(event) => setForm({ ...form, partId: event.target.value })}
+              placeholder="Part ID (optional)"
+              className="rounded-lg border border-white/[0.09] bg-[#060c17] px-3 py-2 font-mono text-[10px] text-ink placeholder:text-dim/60 focus:border-accent/40"
+            />
+            <input
+              aria-label="Insert 0h leakage"
+              type="number"
+              step={0.01}
+              min={0}
+              max={120}
+              value={form.v0}
+              onChange={(event) => setForm({ ...form, v0: event.target.value })}
+              placeholder="0h µA"
+              className="rounded-lg border border-white/[0.09] bg-[#060c17] px-3 py-2 font-mono text-[10px] text-ink placeholder:text-dim/60 focus:border-accent/40"
+            />
+            <input
+              aria-label="Insert 24h leakage"
+              type="number"
+              step={0.01}
+              min={0}
+              max={120}
+              value={form.v24}
+              onChange={(event) => setForm({ ...form, v24: event.target.value })}
+              placeholder="24h µA"
+              className="rounded-lg border border-white/[0.09] bg-[#060c17] px-3 py-2 font-mono text-[10px] text-ink placeholder:text-dim/60 focus:border-accent/40"
+            />
+            <input
+              aria-label="Insert 96h leakage"
+              type="number"
+              step={0.01}
+              min={0}
+              max={120}
+              value={form.v96}
+              onChange={(event) => setForm({ ...form, v96: event.target.value })}
+              placeholder="96h µA"
+              className="rounded-lg border border-white/[0.09] bg-[#060c17] px-3 py-2 font-mono text-[10px] text-ink placeholder:text-dim/60 focus:border-accent/40"
+            />
+            <button
+              type="submit"
+              disabled={!canInsert}
+              className={cn(
+                'inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 font-mono text-[9px] uppercase tracking-[0.12em] transition-colors',
+                canInsert
+                  ? 'bg-accent text-[#03131a] hover:bg-[#8df0ff]'
+                  : 'cursor-not-allowed border border-white/[0.06] bg-white/[0.02] text-dim',
+              )}
+            >
+              <Plus className="h-3 w-3" />
+              Insert + screen
+            </button>
+          </div>
+        </form>
+      </Reveal>
 
       {parts.length === 0 ? (
         <Reveal>
@@ -86,7 +276,7 @@ export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
               { label: 'Fleet screened', value: counts.total.toLocaleString(), sub: '20 manufacturing lots', icon: ShieldCheck, color: 'text-accent' },
               { label: 'Flagged for action', value: flagged.toLocaleString(), sub: `${((flagged / counts.total) * 100).toFixed(1)}% of fleet`, icon: ShieldAlert, color: 'text-review' },
               { label: 'Hard rejects', value: counts.reject.toLocaleString(), sub: 'drift or static breach', icon: ShieldX, color: 'text-fail' },
-              { label: 'Escaped defects', value: missed.toLocaleString(), sub: 'zero-escape gate', icon: ShieldCheck, color: missed === 0 ? 'text-pass' : 'text-fail' },
+              { label: 'Escaped defects', value: escaped.toLocaleString(), sub: 'zero-escape gate', icon: ShieldCheck, color: escaped === 0 ? 'text-pass' : 'text-fail' },
             ].map((card) => {
               const Icon = card.icon;
               return (
@@ -126,7 +316,7 @@ export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <FleetScatter parts={parts} />
+                  <FleetScatter parts={dataset} />
                 </div>
                 <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">
                   defect rings use withheld dataset labels — never visible to the engine
@@ -273,12 +463,13 @@ export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[880px] border-collapse text-left">
+                <table className="w-full min-w-[1040px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-white/[0.06] font-mono text-[8px] uppercase tracking-[0.14em] text-dim">
                       <th className="px-5 py-3 font-normal">Die / lot</th>
                       <th className="px-3 py-3 text-right font-normal">0h µA</th>
                       <th className="px-3 py-3 text-right font-normal">24h µA</th>
+                      <th className="px-3 py-3 text-right font-normal">96h µA</th>
                       <th className="px-3 py-3 text-right font-normal">Δ24</th>
                       <th className="px-3 py-3 text-right font-normal">168h forecast</th>
                       <th className="px-3 py-3 text-right font-normal">actual</th>
@@ -290,46 +481,132 @@ export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
                   <tbody>
                     {rows.map((part) => {
                       const delta = part.v24 - part.v0;
-                      const error = Math.abs(part.screening.forecast - part.v168);
+                      const isNew = insertedIds.has(part.partId);
+                      const error = isNew ? null : Math.abs(part.screening.forecast - part.v168);
+                      const inputClass =
+                        'w-[74px] rounded border border-white/[0.07] bg-transparent px-1.5 py-1 text-right font-mono text-[10.5px] text-muted tnum transition-colors focus:border-accent/40';
+                      const cellKey = (field: string) => `${part.partId}-${field}-${resetToken}`;
                       return (
-                        <tr
-                          key={part.partId}
-                          className="group border-b border-white/[0.035] transition-colors last:border-0 hover:bg-white/[0.022]"
-                        >
-                          <td className="px-5 py-3">
-                            <div className="font-mono text-[10.5px] tracking-[0.04em] text-ink">{part.partId}</div>
-                            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">{part.lotId}</div>
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-[10.5px] tnum text-muted">{fmt(part.v0, 2)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-[10.5px] tnum text-muted">{fmt(part.v24, 2)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-[10.5px] tnum text-muted">{fmt(delta, 2)}</td>
-                          <td
-                            className="px-3 py-3 text-right font-mono text-[10.5px] tnum"
-                            style={{ color: part.screening.verdict === 'reject' ? '#ff8da2' : '#e9effa' }}
-                          >
-                            {fmt(part.screening.forecast, 2)}
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-[10.5px] tnum text-dim">{fmt(part.v168, 2)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-[10.5px] tnum text-dim">{fmt(error, 2)}</td>
-                          <td className="px-3 py-3">
-                            <VerdictBadge verdict={part.screening.verdict} />
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => onInspect(part)}
-                              className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] px-2.5 py-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-muted transition-colors hover:border-accent/35 hover:text-accent"
+                        <Fragment key={part.partId}>
+                          <tr className="group border-b border-white/[0.035] transition-colors last:border-0 hover:bg-white/[0.022]">
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-[10.5px] tracking-[0.04em] text-ink">{part.partId}</span>
+                                {isNew ? (
+                                  <span className="rounded border border-accent/25 bg-accent/[0.07] px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] text-accent">
+                                    new
+                                  </span>
+                                ) : null}
+                                {edits[part.partId] ? (
+                                  <span className="rounded border border-review/25 bg-review/[0.07] px-1.5 py-0.5 font-mono text-[7px] uppercase tracking-[0.1em] text-review">
+                                    edited
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">{part.lotId}</div>
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <input
+                                key={cellKey('v0')}
+                                type="number"
+                                aria-label={`${part.partId} 0h leakage`}
+                                defaultValue={Number(part.v0.toFixed(2))}
+                                step={0.01}
+                                min={0}
+                                max={120}
+                                onChange={(event) => updateReading(part.partId, 'v0', event.target.value)}
+                                className={inputClass}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <input
+                                key={cellKey('v24')}
+                                type="number"
+                                aria-label={`${part.partId} 24h leakage`}
+                                defaultValue={Number(part.v24.toFixed(2))}
+                                step={0.01}
+                                min={0}
+                                max={120}
+                                onChange={(event) => updateReading(part.partId, 'v24', event.target.value)}
+                                className={inputClass}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <input
+                                key={cellKey('v96')}
+                                type="number"
+                                aria-label={`${part.partId} 96h leakage`}
+                                defaultValue={Number(part.v96.toFixed(2))}
+                                step={0.01}
+                                min={0}
+                                max={120}
+                                onChange={(event) => updateReading(part.partId, 'v96', event.target.value)}
+                                className={inputClass}
+                              />
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-[10.5px] tnum text-muted">{fmt(delta, 2)}</td>
+                            <td
+                              className="px-3 py-3 text-right font-mono text-[10.5px] tnum"
+                              style={{ color: part.screening.verdict === 'reject' ? '#ff8da2' : '#e9effa' }}
                             >
-                              Inspect
-                              <ArrowUpRight className="h-3 w-3" />
-                            </button>
-                          </td>
-                        </tr>
+                              {fmt(part.screening.forecast, 2)}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-[10.5px] tnum text-dim">
+                              {isNew ? '—' : fmt(part.v168, 2)}
+                            </td>
+                            <td className="px-3 py-3 text-right font-mono text-[10.5px] tnum text-dim">
+                              {error === null ? '—' : fmt(error, 2)}
+                            </td>
+                            <td className="px-3 py-3">
+                              <VerdictBadge verdict={part.screening.verdict} />
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <div className="flex justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewId(previewId === part.partId ? null : part.partId)}
+                                  className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] px-2.5 py-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-muted transition-colors hover:border-accent/35 hover:text-accent"
+                                >
+                                  {previewId === part.partId ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                  {previewId === part.partId ? 'Hide' : 'Preview'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onInspect(part)}
+                                  className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] px-2.5 py-1.5 font-mono text-[8px] uppercase tracking-[0.12em] text-muted transition-colors hover:border-accent/35 hover:text-accent"
+                                >
+                                  Inspect
+                                  <ArrowUpRight className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {previewId === part.partId ? (
+                            <tr className="border-b border-white/[0.035] bg-black/20">
+                              <td colSpan={10} className="px-5 py-4">
+                                <div className="mx-auto max-w-[560px]">
+                                  <TrajectoryChart
+                                    v0={part.v0}
+                                    v24={part.v24}
+                                    v96={part.v96}
+                                    showV96={showV96}
+                                    forecast={part.screening.forecast}
+                                    verdict={part.screening.verdict}
+                                  />
+                                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">
+                                    <span>inline preview · {part.partId}</span>
+                                    <span>{fmt(part.screening.forecast, 2)} µA @ 168h</span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
                       );
                     })}
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-5 py-14 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-dim">
+                        <td colSpan={10} className="px-5 py-14 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-dim">
                           no die match this filter
                         </td>
                       </tr>
@@ -340,7 +617,7 @@ export function Telemetry({ parts, lots, missed, onInspect }: TelemetryProps) {
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-5 py-3.5">
                 <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-dim">
-                  showing {rows.length} of {filtered.length.toLocaleString()} · inspect sends the die to the console
+                  showing {rows.length} of {filtered.length.toLocaleString()} · edit readings inline or inspect a die
                 </span>
                 {limit < filtered.length ? (
                   <button

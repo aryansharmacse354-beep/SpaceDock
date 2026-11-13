@@ -11,7 +11,7 @@ import { Pipeline } from './components/sections/Pipeline';
 import { Telemetry } from './components/sections/Telemetry';
 import { useScreeningData } from './hooks/useScreeningData';
 import { createCertificate, downloadJson, type QaCertificate } from './lib/certificate';
-import { screenDie } from './lib/model';
+import { globalAttributions, screenDie } from './lib/model';
 import { DEFAULT_CONFIG } from './lib/slots';
 import type { ConsoleInput, LotProfile, ModelConfig, ScreenedPart, SlotId } from './lib/types';
 
@@ -28,6 +28,11 @@ export default function App() {
   const [inputOverride, setInputOverride] = useState<ConsoleInput | null>(null);
   const [highlight, setHighlight] = useState(false);
   const highlightTimer = useRef<number | undefined>(undefined);
+  const showV96 = config.slots.some((slot) => LATE_READ_SLOTS.includes(slot));
+  const attribution = useMemo(
+    () => (data.model ? globalAttributions(data.records, data.model) : []),
+    [data.records, data.model],
+  );
 
   useEffect(
     () => () => {
@@ -170,7 +175,7 @@ export default function App() {
           result={result}
           ready={data.status === 'ready'}
           highlight={highlight}
-          showV96={config.slots.some((slot) => LATE_READ_SLOTS.includes(slot))}
+          showV96={showV96}
           certificateId={certificate?.certificate_id ?? null}
           onDownloadCertificate={handleDownload}
         />
@@ -178,12 +183,18 @@ export default function App() {
         <Telemetry
           parts={data.parts}
           lots={data.lots}
-          missed={data.metrics?.falseNegatives ?? 0}
+          model={data.model}
           onInspect={handleInspect}
         />
 
-        <Benchmarks metrics={data.metrics} />
-        <Audit certificate={certificate} result={result} onDownload={handleDownload} />
+        <Benchmarks metrics={data.metrics} attribution={attribution} />
+        <Audit
+          certificate={certificate}
+          result={result}
+          input={input}
+          showV96={showV96}
+          onDownload={handleDownload}
+        />
       </main>
 
       <Footer />

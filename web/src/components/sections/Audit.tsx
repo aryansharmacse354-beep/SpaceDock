@@ -2,13 +2,18 @@ import { ArrowUpRight, Braces, Check, Copy, Download, Fingerprint, LockKeyhole }
 import { useState } from 'react';
 import { cn } from '../../lib/cn';
 import type { QaCertificate } from '../../lib/certificate';
-import type { ScreeningResult } from '../../lib/types';
+import { fmt } from '../../lib/format';
+import { SAFETY_SLOPE, USL, Z_LIMIT } from '../../lib/model';
+import type { ConsoleInput, ScreeningResult } from '../../lib/types';
+import { TrajectoryChart } from '../charts/TrajectoryChart';
 import { Section, SectionHeading } from '../ui/SectionHeading';
 import { Reveal } from '../ui/Reveal';
 
 interface AuditProps {
   certificate: QaCertificate | null;
   result: ScreeningResult | null;
+  input: ConsoleInput;
+  showV96: boolean;
   onDownload: () => void;
 }
 
@@ -30,10 +35,20 @@ const guarantees = [
   },
 ];
 
-export function Audit({ certificate, result, onDownload }: AuditProps) {
+export function Audit({ certificate, result, input, showV96, onDownload }: AuditProps) {
   const [copied, setCopied] = useState(false);
   const json = certificate ? JSON.stringify(certificate, null, 2) : null;
   const lines = json ? json.split('\n') : [];
+  const gates = result
+    ? [
+        { label: '168h forecast', value: result.forecast, limit: USL, unit: 'µA', digits: 2 },
+        { label: 'Drift slope', value: Math.max(0, result.slope), limit: SAFETY_SLOPE, unit: 'µA/h', digits: 5 },
+        { label: 'Lot PAT @ 24h', value: Math.abs(result.z24), limit: Z_LIMIT, unit: 'σ', digits: 2 },
+        ...(showV96
+          ? [{ label: 'Lot PAT @ 96h', value: Math.abs(result.z96), limit: Z_LIMIT, unit: 'σ', digits: 2 }]
+          : []),
+      ]
+    : [];
 
   const copyCertificate = async () => {
     if (!json) return;
@@ -63,6 +78,69 @@ export function Audit({ certificate, result, onDownload }: AuditProps) {
         title="Every verdict ships with evidence."
         description="A screening decision is only useful if it can be defended six months later. The audit inspector issues a complete QA record with every verdict — inputs, model, reasons, and checksum — exportable as JSON."
       />
+
+      {result ? (
+        <Reveal delay={0.06}>
+          <div className="mt-10 grid gap-4 lg:grid-cols-2">
+            <div className="panel min-w-0 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="label text-[8.5px]">Panel A · leakage trajectory</div>
+                  <div className="mt-1 text-[13px] text-ink">Measured reads vs 168h forecast</div>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.14em] text-muted">
+                  {result.verdict}
+                </span>
+              </div>
+              <div className="mt-3">
+                <TrajectoryChart
+                  v0={input.v0}
+                  v24={input.v24}
+                  v96={input.v96}
+                  showV96={showV96}
+                  forecast={result.forecast}
+                  verdict={result.verdict}
+                />
+              </div>
+            </div>
+
+            <div className="panel min-w-0 p-5">
+              <div>
+                <div className="label text-[8.5px]">Panel B · gate margins</div>
+                <div className="mt-1 text-[13px] text-ink">Each gate against its limit</div>
+              </div>
+              <div className="mt-6 space-y-5">
+                {gates.map((gate) => {
+                  const ratio = gate.limit === 0 ? 0 : gate.value / gate.limit;
+                  const tone = ratio >= 1 ? '#ff5f7e' : ratio >= 0.62 ? '#ffbf5a' : '#45e6a5';
+                  return (
+                    <div key={gate.label}>
+                      <div className="flex items-baseline justify-between gap-3 font-mono text-[9px] uppercase tracking-[0.12em]">
+                        <span className="text-muted">{gate.label}</span>
+                        <span className="tnum text-ink">
+                          {fmt(gate.value, gate.digits)} / {fmt(gate.limit, gate.digits)} {gate.unit}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.max(2, Math.min(100, ratio * 100))}%`,
+                            backgroundColor: tone,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-6 font-mono text-[8px] uppercase leading-relaxed tracking-[0.12em] text-dim">
+                forecast vs USL · drift vs safety slope · PAT z vs ±3σ
+              </p>
+            </div>
+          </div>
+        </Reveal>
+      ) : null}
 
       <div className="mt-12 grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
         <div className="flex min-w-0 flex-col gap-3">
