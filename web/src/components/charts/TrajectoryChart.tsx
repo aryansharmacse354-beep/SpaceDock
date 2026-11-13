@@ -6,31 +6,43 @@ import type { Verdict } from '../../lib/types';
 interface TrajectoryChartProps {
   v0: number;
   v24: number;
-  v96: number;
+  v96?: number;
+  showV96?: boolean;
   forecast: number;
   verdict: Verdict;
 }
 
-export function TrajectoryChart({ v0, v24, v96, forecast, verdict }: TrajectoryChartProps) {
+export function TrajectoryChart({
+  v0,
+  v24,
+  v96 = v24,
+  showV96 = false,
+  forecast,
+  verdict,
+}: TrajectoryChartProps) {
   const width = 560;
   const height = 300;
   const pad = { top: 26, right: 26, bottom: 40, left: 52 };
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
-  const yMax = Math.max(55, forecast * 1.12, v0 * 1.2);
+  const yMax = Math.max(55, forecast * 1.12, v0 * 1.2, showV96 ? v96 * 1.1 : 0);
   const x = (hours: number) => pad.left + (hours / 168) * innerW;
   const y = (value: number) => pad.top + innerH - (Math.min(value, yMax) / yMax) * innerH;
   const color = verdictMeta[verdict].hex;
 
+  const startHour = showV96 ? 96 : 24;
+  const startValue = showV96 ? v96 : v24;
+  const span = 168 - startHour;
+
   const projection: Array<[number, number]> = [];
-  for (let step = 0; step <= 24; step += 1) {
-    const t = 96 + (step / 24) * 72;
-    const eased = ((t - 96) / 72) ** 1.55;
-    projection.push([t, v96 + (forecast - v96) * eased]);
+  for (let step = 0; step <= 32; step += 1) {
+    const t = startHour + (step / 32) * span;
+    const eased = ((t - startHour) / span) ** (showV96 ? 1.35 : 1.7);
+    projection.push([t, startValue + (forecast - startValue) * eased]);
   }
 
   const projectionPath = projection.map(([h, value], i) => `${i === 0 ? 'M' : 'L'}${x(h)},${y(value)}`).join(' ');
-  const areaPath = `${projectionPath} L${x(168)},${y(0)} L${x(96)},${y(0)} Z`;
+  const areaPath = `${projectionPath} L${x(168)},${y(0)} L${x(startHour)},${y(0)} Z`;
   const safeEnd = v0 + SAFETY_SLOPE * 168;
   const ticks = [0, yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax];
 
@@ -109,17 +121,23 @@ export function TrajectoryChart({ v0, v24, v96, forecast, verdict }: TrajectoryC
       <path d={projectionPath} fill="none" stroke={color} strokeWidth="1.8" strokeDasharray="5 6" strokeOpacity="0.9" />
 
       <line x1={x(0)} y1={y(v0)} x2={x(24)} y2={y(v24)} stroke={color} strokeWidth="2.4" strokeLinecap="round" />
-      <line x1={x(24)} y1={y(v24)} x2={x(96)} y2={y(v96)} stroke={color} strokeWidth="2.4" strokeLinecap="round" />
+      {showV96 ? (
+        <line x1={x(24)} y1={y(v24)} x2={x(96)} y2={y(v96)} stroke={color} strokeWidth="2.4" strokeLinecap="round" />
+      ) : null}
       <circle cx={x(0)} cy={y(v0)} r="4.5" fill="#04121a" stroke={color} strokeWidth="2" />
       <circle cx={x(24)} cy={y(v24)} r="4.5" fill="#04121a" stroke={color} strokeWidth="2" />
-      <circle cx={x(96)} cy={y(v96)} r="4.5" fill="#04121a" stroke={color} strokeWidth="2" />
+      {showV96 ? (
+        <circle cx={x(96)} cy={y(v96)} r="4.5" fill="#04121a" stroke={color} strokeWidth="2" />
+      ) : (
+        <circle cx={x(96)} cy={y(v24 + (forecast - v24) * 0.5 ** 1.7)} r="3" fill={color} fillOpacity="0.55" />
+      )}
       <circle cx={x(168)} cy={y(forecast)} r="6" fill={color} filter="url(#trajGlow)" />
       <circle cx={x(168)} cy={y(forecast)} r="12" fill="none" stroke={color} strokeOpacity="0.3" />
 
       <text x={x(6)} y={y(Math.max(v0, v24)) - 14} className="fill-[#a9bdd6] font-mono text-[9px] tracking-[0.14em]">
         MEASURED
       </text>
-      <text x={x(120)} y={y(forecast) - 18} textAnchor="middle" fill={color} className="font-mono text-[9px] tracking-[0.14em]">
+      <text x={x(102)} y={y(forecast) - 18} textAnchor="middle" fill={color} className="font-mono text-[9px] tracking-[0.14em]">
         {fmt(forecast, 2)} µA FORECAST
       </text>
       <text x={x(168)} y={y(forecast) + 24} textAnchor="end" className="fill-[#8ea0b9] font-mono text-[9px] tracking-[0.14em]">

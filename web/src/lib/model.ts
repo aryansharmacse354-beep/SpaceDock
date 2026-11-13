@@ -160,7 +160,14 @@ export function fitModel(parts: PartRecord[], config: ModelConfig): DriftModel {
   const terms = buildTerms(config.slots, config.degree);
   const rows = parts.map((part) => terms.map((term) => term.compute(part, lotOf(part))));
   const targets = parts.map((part) => part.v168);
-  const coef = standardizedFit(rows, targets, config.lambda);
+  const baselinePair =
+    config.degree === 2 &&
+    config.slots.length === 2 &&
+    config.slots.includes('v0') &&
+    config.slots.includes('v24');
+  const coef = baselinePair
+    ? solveRidge(rows, targets, config.lambda)
+    : standardizedFit(rows, targets, config.lambda);
   return {
     coef,
     config: { ...config, slots: [...config.slots] },
@@ -247,7 +254,7 @@ export function screenDie(signals: Signals, lot: LotProfile, model: DriftModel):
       {
         state: 'ok',
         label: 'Feature set',
-        detail: `${model.config.slots.length} slots · degree ${model.config.degree} · ${model.terms.length} standardized terms.`,
+        detail: `${model.config.slots.length} slots · degree ${model.config.degree} · ${model.terms.length} regression terms.`,
       },
     ],
   };

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { createCircuitTexture } from '../../lib/circuitTexture';
 
-function Die({ accent }: { accent: string }) {
+function Die() {
   const texture = useMemo(() => createCircuitTexture(1024), []);
   const pinGeometry = useMemo(() => new THREE.BoxGeometry(0.045, 0.045, 0.16), []);
   const pinMaterial = useMemo(
@@ -53,7 +53,7 @@ function Die({ accent }: { accent: string }) {
         <meshStandardMaterial
           map={texture}
           emissiveMap={texture}
-          emissive={accent}
+          emissive="#7ae9ff"
           emissiveIntensity={1.05}
           metalness={0.35}
           roughness={0.52}
@@ -76,7 +76,7 @@ function Die({ accent }: { accent: string }) {
         />
       ))}
 
-      <pointLight position={[0, 1.25, 0]} color={accent} intensity={6} distance={5.5} decay={2} />
+      <pointLight position={[0, 1.25, 0]} color="#4fe3ff" intensity={6} distance={5.5} decay={2} />
     </group>
   );
 }
@@ -161,7 +161,7 @@ function Orbiter({
   );
 }
 
-function ScanRings({ still, accent }: { still: boolean; accent: string }) {
+function ScanRings({ still }: { still: boolean }) {
   const group = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
@@ -173,7 +173,7 @@ function ScanRings({ still, accent }: { still: boolean; accent: string }) {
     <group ref={group} position={[0, 0.34, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <mesh>
         <ringGeometry args={[1.98, 2.01, 128, 1, 0, Math.PI * 1.25]} />
-        <meshBasicMaterial color={accent} transparent opacity={0.38} side={THREE.DoubleSide} toneMapped={false} />
+        <meshBasicMaterial color="#4fe3ff" transparent opacity={0.38} side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
       <mesh>
         <ringGeometry args={[2.2, 2.215, 128, 1, Math.PI * 1.1, Math.PI * 0.6]} />
@@ -224,7 +224,7 @@ function Starfield() {
   );
 }
 
-function Scene({ still, accent }: { still: boolean; accent: string }) {
+function Scene({ still }: { still: boolean }) {
   const rig = useRef<THREE.Group>(null);
   const { pointer } = useThree();
 
@@ -249,12 +249,12 @@ function Scene({ still, accent }: { still: boolean; accent: string }) {
       <group ref={rig}>
         <Float speed={still ? 0 : 1.2} rotationIntensity={still ? 0 : 0.18} floatIntensity={still ? 0 : 0.5} floatingRange={[-0.06, 0.06]}>
           <group rotation={[0.16, 0, 0.06]} scale={1.02}>
-            <Die accent={accent} />
+            <Die />
           </group>
         </Float>
 
-        <Orbiter radius={2.35} tilt={[0.34, 0.16, 0.08]} speed={0.22} offset={0.6} color={accent}>
-          <Satellite color={accent} />
+        <Orbiter radius={2.35} tilt={[0.34, 0.16, 0.08]} speed={0.22} offset={0.6} color="#4fe3ff">
+          <Satellite color="#7ef0ff" />
         </Orbiter>
 
         <Orbiter radius={3.05} tilt={[-0.22, -0.32, 0.42]} speed={-0.14} offset={2.4} color="#9a7bff">
@@ -263,7 +263,7 @@ function Scene({ still, accent }: { still: boolean; accent: string }) {
 
         <Orbiter radius={3.65} tilt={[0.58, 0.82, 0.18]} speed={0.09} offset={4.1} color="#6f8cff" />
 
-        <ScanRings still={still} accent={accent} />
+        <ScanRings still={still} />
       </group>
 
       <EffectComposer multisampling={0}>
@@ -273,11 +273,11 @@ function Scene({ still, accent }: { still: boolean; accent: string }) {
   );
 }
 
-export function HeroScene({ still = false, accent = '#4fe3ff' }: { still?: boolean; accent?: string }) {
+export function HeroScene({ still = false }: { still?: boolean }) {
   return (
     <Canvas
       dpr={[1, 1.75]}
-      camera={{ position: [0, 2.35, 6.45], fov: 38 }}
+      camera={{ position: [0, 2.2, 5.4], fov: 38 }}
       gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
       frameloop="always"
       fallback={
@@ -291,7 +291,7 @@ export function HeroScene({ still = false, accent = '#4fe3ff' }: { still?: boole
         gl.setClearColor(0x000000, 0);
       }}
     >
-      <Scene still={still} accent={accent} />
+      <Scene still={still} />
     </Canvas>
   );
 }

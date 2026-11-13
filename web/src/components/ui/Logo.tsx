@@ -41,7 +41,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
             SPACE<span className="text-accent">DOCK</span>
           </span>
           <span className="mt-1 font-mono text-[8px] uppercase tracking-[0.3em] text-dim">
-            ESS Screening
+            Mission Control
           </span>
         </span>
       ) : null}

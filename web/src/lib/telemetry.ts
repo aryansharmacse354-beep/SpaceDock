@@ -58,19 +58,15 @@ export function parseTelemetry(csv: string): PartRecord[] {
 
     const v0 = Number(cells[c.v0]);
     const v24 = Number(cells[c.v24]);
-    const v168 = Number(cells[c.v168]);
-    if (!Number.isFinite(v0) || !Number.isFinite(v24) || !Number.isFinite(v168)) continue;
-
-    const v96raw = Number(cells[c.v96]);
-    const v96 = Number.isFinite(v96raw) ? v96raw : v24;
+    if (!Number.isFinite(v0) || !Number.isFinite(v24)) continue;
 
     parts.push({
       lotId: cells[c.lot].trim(),
       partId: cells[c.part].trim(),
       v0,
       v24,
-      v96,
-      v168,
+      v96: Number(cells[c.v96]),
+      v168: Number(cells[c.v168]),
       lotMean: Number(cells[c.mean]),
       lotSigma: Number(cells[c.sigma]),
       z24: Number(cells[c.z24]),
