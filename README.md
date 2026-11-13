@@ -1,63 +1,95 @@
-# 🛰️ Space-Grade Semiconductor Burn-In Screening System
-### Automated Machine Learning Diagnostics for 125°C Environmental Stress Screening (ESS) • Zero Defect Escape Mission Architecture
+# SpaceDock — Space-Grade Burn-In Screening
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.3%2B-F7931E.svg)](https://scikit-learn.org/)
-[![Compliance](https://img.shields.io/badge/Standard-MIL--STD--883%20%7C%20AEC--Q001-success.svg)](#)
-[![Zero Escape](https://img.shields.io/badge/Defect%20Escape%20Rate-0.00%25-brightgreen.svg)](#)
+Mission-control web app for 125 °C environmental stress screening (ESS). It reads early burn-in leakage, forecasts the 168-hour value, and returns a pass / review / reject verdict for every die.
 
----
+**Live app:** [spacedock-phi.vercel.app](https://spacedock-phi.vercel.app)  
+**Web source:** [`web/`](web/)
 
-## 📌 Mission Overview
-Spaceflight microchips operating in deep space environments undergo rigorous **^\circ\text{C}$ Environmental Stress Screening (ESS)** under military standard **MIL-STD-883 / AEC-Q001**. Standard laboratory procedures require baking semiconductors for **168 hours (7 full days)**.
+## What it does
 
-### The Problem
-Traditional aerospace testing relies on a static upper specification limit ( = 50\,\mu\text{A}$). Because latent gate-oxide defects start at sub-microamp levels ( - 12\,\mu\text{A}$), standard screening misses **\%$ of latent runaway defects**, leading to catastrophic orbital payload failures.
+- Reads 0 h and 24 h leakage per die; optional 96 h and derived signals can be added to the model.
+- Forecasts 168 h leakage before the full seven-day bake completes.
+- Applies a 50 µA static limit, lot-aware ±3σ part average testing, and a 0.016599 µA/h safety-slope gate.
+- Holds 100% latent-defect recall with zero escapes on the bundled holdout.
+- Runs entirely in the browser — telemetry never leaves the page.
 
-### The Machine Learning Solution
-Our **Unified Space-Grade Screening System** solves this with two core capabilities:
-1. **\%$ Time & Cost Reduction (24h Early Forecast)**: Evaluates early \text{h} \to 24\text{h}$ thermal drift to accurately forecast 168h end-of-life leakage with **.6\%$ accuracy (^2 = 0.9860$, $\text{MAE} = 0.3181\,\mu\text{A}$)**.
-2. **Zero Defect Escape (.00\%$ False Negatives)**: Dynamic Lot-Aware Part Average Testing (PAT) combined with a calibrated safety slope limit ({\text{safe}} = 0.016599\,\mu\text{A}/\text{h}$) to guarantee **\%$ defect containment**.
+## Web app
 
----
+The dashboard is organized into connected panels:
 
-## 🎛️ Live Mission Control Dashboard Features
-The interactive Streamlit application (pp.py) provides 4 dedicated mission modules:
-* **⚡ Tab 1: Real-Time Component Screener**: Live single-part inference, interactive dynamic trajectory curve shifting colors (🟢 Green Pass vs 🔴 Red Anomaly), and instant AI Health Score (-100$).
-* **📊 Tab 2: Batch Telemetry Database**: Searchable 1,002-part telemetry database, in-app Excel-style live data editor (st.data_editor), component insertion form, and inline trajectory preview.
-* **🔍 Tab 3: Component QA Audit Inspector**: Space-grade dual-panel audit curves and 1-click **Download Official QA Audit Certificate (JSON)**.
-* **📈 Tab 4: Model Parity Benchmark**: Holdout validation parity evaluation (^2 = 0.9860$) and global SHAP feature attributions.
+- **Mission** — why early screening matters and where static limits fail.
+- **Architecture** — the four gates every die passes through.
+- **Model** — selectable input slots with holdout metrics, parity plot, and forecast terms.
+- **Console** — live single-die screening with adjustable burn-in values, verdict reasons, health score, and projected drift.
+- **Telemetry** — searchable fleet ledger, risk scatter, verdict mix, and one-click inspection.
+- **Validation** — benchmark comparison for the screening protocol.
+- **Audit** — reproducible QA certificate with checksum and JSON export.
 
----
+Model inputs can be toggled at any time. The fit, fleet screen, console readout, and audit certificate refit immediately.
 
-## 🔬 Benchmark Comparison
-| Screening Architecture | Latent Defect Recall | False Negative Rate | 168h Forecast MAE | Flight Risk Level |
-| :--- | :---: | :---: | :---: | :---: |
-| **Traditional Static Limit ( = 50\,\mu\text{A}$)** | .0\%$ (\%$ Escapes) | .0\%$ | N/A | 🚨 Critical Hazard |
-| **AEC-Q001 Dynamic PAT + Isolation Forest** | .5\%$ | .5\%$ | N/A | ⚠️ Moderate Risk |
-| **Unified Space-Grade ML Architecture (Ours)** | **.0\%$ (0 Escapes)** | **.00\%$** | **.3181\,\mu\text{A}$ (^2 = 0.9860$)** | 🟢 **Zero Escape Flight Ready** |
+### Stack
 
----
+Vite 7 · React 19 · TypeScript · Tailwind CSS v4 · React Three Fiber · Framer Motion · lucide-react
 
-## 🚀 Installation & Local Execution
+### Run locally
 
-`ash
-# Clone repository
-git clone https://github.com/aryansharmacse354-beep/SpaceDock.git
-cd SpaceDock
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # production build
+npm run preview  # preview the build
+```
 
-# Install requirements
+## Model and validation
+
+- **Target:** 168 h leakage (µA).
+- **Default inputs:** V₀ and V₂₄.
+- **Optional slots:** V₉₆, Δ₀→₂₄, Z₂₄, S₂₄→₉₆, Z₉₆.
+- **Fit:** quadratic ridge regression, λ = 1e-7, deterministic 80/20 holdout, refit on all traces after scoring.
+- **Default holdout:** R² 0.968 · MAE 0.632 µA · RMSE 1.487 µA · 100% recall · 0 escapes out of 199 labeled defects.
+- **With V₉₆:** 10 regression terms, R² 0.990 · MAE 0.261 µA.
+
+Gate constants: static USL 50 µA, safety slope 0.016599 µA/h, review slope 0.010291 µA/h, ±3σ PAT at 24 h and 96 h. Late-read checks activate only when V₉₆, S₂₄→₉₆, or Z₉₆ is an active slot.
+
+## Dataset
+
+`web/public/data/telemetry.csv` contains 2,000 die across 20 lots:
+
+```text
+Lot_ID, Part_ID, Value_0h_uA, Value_24h_uA, Value_96h_uA, Value_168h_uA,
+Lot_Mean_uA, Lot_Sigma_uA, Dynamic_Z_*, Slope_*, Static_Limit_Fail, Latent_Defect_Label
+```
+
+## Python research pipeline
+
+The original research tooling remains at the repository root.
+
+```bash
 pip install -r requirements.txt
+python -m streamlit run app.py   # Streamlit research dashboard
+python train_models.py           # retrain / validate saved models
+```
 
-# Run dashboard
-python -m streamlit run app.py
-`
+- `app.py` — Streamlit dashboard for screening, batch telemetry, audit, and parity checks.
+- `train_models.py` — training and holdout evaluation.
+- `models/` — serialized model artifacts.
+- `data/`, `outputs/` — generated datasets and results.
 
----
+## Repository layout
 
-## 🌐 Cloud Deployment (Vercel & Streamlit Cloud)
-* **Streamlit Community Cloud (Recommended 1-Click)**:
-  1. Connect your GitHub account at [share.streamlit.io](https://share.streamlit.io).
-  2. Select this repository (ryansharmacse354-beep/SpaceDock), branch main, and main file pp.py.
-  3. Click **Deploy** — your live dashboard will be accessible worldwide!
+```text
+app.py                  Streamlit research dashboard
+train_models.py         model training and validation
+web/                    mission-control web app (primary interface)
+web/public/data/        bundled 2,000-die telemetry feed
+models/                 trained model artifacts
+```
+
+## Standards and scope
+
+Built around MIL-STD-883 and AEC-Q001 practice for 125 °C ESS and 168 h burn-in. The bundled telemetry is synthetic and the verdicts are a screening aid, not a flight-qualification authority.
+
+## Deployment
+
+The web app is configured for Vercel under the `ai-experts1` team, project `spacedock`. Every push to `main` that changes `web/` can be redeployed from the Vercel project dashboard.
